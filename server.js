@@ -13,6 +13,93 @@ const io = new Server(server, {
 // 静态文件
 app.use(express.static(__dirname));
 
+// 管理员后台
+app.get('/admin', (req, res) => {
+  const password = req.query.pwd || '';
+  if (password !== 'teacher123') {
+    res.send(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>后台管理</title></head>
+<body style="font-family:sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f5f5f5">
+<form method="get" style="background:#fff;padding:40px;border:1px solid #ddd;max-width:360px;width:90%">
+<h2 style="margin:0 0 20px;font-size:1.4rem">🔐 后台管理登录</h2>
+<input name="pwd" type="password" placeholder="请输入管理密码" style="width:100%;padding:12px;margin-bottom:16px;border:1px solid #ddd;font-size:1rem" autofocus>
+<button style="width:100%;padding:12px;background:#167257;color:#fff;border:none;font-size:1rem;cursor:pointer">进入后台</button>
+<p style="margin:12px 0 0;color:#666;font-size:.85rem">默认密码：teacher123</p>
+</form></body></html>`);
+    return;
+  }
+  
+  const onlineRooms = Object.entries(rooms).map(([code, room]) => ({
+    code,
+    status: room.status,
+    players: Object.values(room.players).map(p => p.name),
+    createdAt: new Date(room.createdAt).toLocaleString('zh-CN')
+  }));
+  
+  res.send(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>PK 后台管理</title>
+<style>
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;margin:0;background:#f5f5f5;color:#17212b}
+.header{background:#17212b;color:#fff;padding:20px 24px;display:flex;justify-content:space-between;align-items:center}
+.header h1{margin:0;font-size:1.3rem}
+.nav a{color:#f4c542;text-decoration:none;font-weight:800;margin-left:20px}
+.container{max-width:1100px;margin:0 auto;padding:24px}
+.section{background:#fff;border:1px solid #cfd7cc;padding:24px;margin-bottom:20px}
+.section h2{margin:0 0 16px;font-size:1.1rem;display:flex;justify-content:space-between;align-items:center}
+.refresh{background:none;border:1px solid #cfd7cc;padding:6px 14px;cursor:pointer;font-size:.85rem}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #e9eee6}
+th{background:#f7f5ed;font-weight:850;color:#667085}
+.empty{color:#98a2b3;text-align:center;padding:30px}
+.badge{padding:3px 8px;font-size:.78rem;font-weight:850;border:1px solid #cfd7cc}
+.badge.lobby{background:#eaf4ff;color:#225c91}
+.badge.playing{background:#e8f6ef;color:#167257}
+.badge.finished{background:#fff7d9;color:#6f5710}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📊 PEP 五下 PK · 后台管理</h1>
+  <div class="nav"><a href="/">返回游戏</a></div>
+</div>
+<div class="container">
+  <div class="section">
+    <h2>🟢 当前在线房间 <span style="color:#167257;font-size:.9rem">${onlineRooms.length} 个</span></h2>
+    ${onlineRooms.length === 0 ? '<div class="empty">暂无在线房间</div>' : `
+    <table><thead><tr><th>房间码</th><th>状态</th><th>玩家</th><th>创建时间</th></tr></thead><tbody>
+    ${onlineRooms.map(r => `<tr>
+      <td><strong>${r.code}</strong></td>
+      <td><span class="badge ${r.status}">${r.status === 'lobby' ? '等待中' : r.status === 'playing' ? '比赛中' : '已结束'}</span></td>
+      <td>${r.players.join(' vs ')}</td>
+      <td>${r.createdAt}</td>
+    </tr>`).join('')}
+    </tbody></table>`}
+  </div>
+  
+  <div class="section">
+    <h2>📝 历史 PK 记录 <span style="color:#667085;font-size:.9rem">最近 ${gameHistory.length} 场</span></h2>
+    ${gameHistory.length === 0 ? '<div class="empty">暂无历史记录</div>' : `
+    <table><thead><tr><th>时间</th><th>房间</th><th>玩家</th><th>比分</th><th>获胜者</th></tr></thead><tbody>
+    ${gameHistory.map(g => `<tr>
+      <td>${g.time}</td>
+      <td>${g.roomCode}</td>
+      <td>${g.players.map(p => p.name).join(' vs ')}</td>
+      <td>${g.players.map(p => p.score).join(' : ')}</td>
+      <td><strong>${g.winner}</strong></td>
+    </tr>`).join('')}
+    </tbody></table>`}
+  </div>
+</div>
+<script>
+// 自动刷新
+setTimeout(() => location.reload(), 30000);
+</script>
+</body>
+</html>`);
+});
+
 // ===== 正确答案索引（服务器只需这个来判分）=====
 const ANSWERS = {
   u1q1:1,u1q2:1,u1q3:2,u1q4:2,u1q5:2,u1q6:1,u1q7:0,u1q8:2,u1q9:0,u1q10:2,
@@ -25,6 +112,7 @@ const ANSWERS = {
 
 // ===== 内存存储 =====
 const rooms = {};
+const gameHistory = []; // 存储历史 PK 记录
 
 // 清理超过3小时的空房间
 setInterval(() => {
@@ -57,6 +145,24 @@ function shuffled(items) {
 // 广播房间状态
 function broadcast(roomCode) {
   io.to(roomCode).emit('room-update', rooms[roomCode]);
+}
+
+// 记录 PK 历史
+function recordGameHistory(room, roomCode) {
+  const players = Object.entries(room.players);
+  if (players.length >= 2) {
+    const sorted = players.sort((a, b) => (b[1].score || 0) - (a[1].score || 0));
+    const tie = sorted[0][1].score === sorted[1][1].score;
+    gameHistory.unshift({
+      time: new Date().toLocaleString('zh-CN'),
+      roomCode: roomCode,
+      players: players.map(([id, p]) => ({ name: p.name, score: p.score || 0 })),
+      winner: tie ? '平局' : sorted[0][1].name,
+      rounds: room.questionIds.length
+    });
+    // 只保留最近 100 条记录
+    if (gameHistory.length > 100) gameHistory.pop();
+  }
 }
 
 // ===== Socket.io 逻辑 =====
@@ -211,6 +317,8 @@ io.on('connection', (socket) => {
     const next = room.round + 1;
     if (next >= room.questionIds.length) {
       room.status = 'finished';
+      // 记录 PK 结果
+      recordGameHistory(room, myRoom);
     } else {
       room.round = next;
       room.current = { questionId: room.questionIds[next], startedAt: Date.now(), resolved: false };
@@ -224,6 +332,12 @@ io.on('connection', (socket) => {
   socket.on('back-to-lobby', (callback) => {
     const room = rooms[myRoom];
     if (!room || room.hostUid !== myUid) return callback?.({ ok: false });
+    
+    // 记录 PK 结果到历史（如果还没记录）
+    if (room.status === 'finished') {
+      recordGameHistory(room, myRoom);
+    }
+    
     room.status = 'lobby';
     room.questionIds = [];
     room.round = 0;
