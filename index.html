@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PEP 五下实时双人 PK</title>
+<style>
+  :root {
+    --ink: #17212b; --muted: #667085; --paper: #fffef9; --bg: #e9eee6;
+    --line: #cfd7cc; --green: #167257; --red: #c64f3f; --blue: #225c91;
+    --yellow: #f4c542; --soft-blue: #eaf4ff; --soft-green: #e8f6ef;
+    --shadow: 0 18px 40px rgba(23, 33, 43, .14);
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0; color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(rgba(23,33,43,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(23,33,43,.045) 1px, transparent 1px), var(--bg);
+    background-size: 28px 28px;
+  }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+  .app { width: min(1080px, calc(100% - 24px)); margin: 0 auto; padding: 18px 0 34px; }
+  .topbar { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 14px; }
+  .brand { font: 900 1.1rem/1 Georgia, "Times New Roman", serif; }
+  .connection { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .86rem; font-weight: 800; }
+  .dot { width: 10px; aspect-ratio: 1; border-radius: 50%; background: #9aa4b2; }
+  .dot.online { background: var(--green); box-shadow: 0 0 0 4px rgba(22,114,87,.13); }
+  .panel { background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+  .screen { display: none; }
+  .screen.active { display: block; animation: enter .32s ease both; }
+  @keyframes enter { from { opacity: 0; transform: translateY(8px); } }
+
+  .welcome { display: grid; grid-template-columns: 1.05fr .95fr; min-height: 620px; overflow: hidden; }
+  .welcome-copy { padding: clamp(28px, 6vw, 68px); display: flex; flex-direction: column; justify-content: space-between; background: var(--ink); color: #fff; }
+  .eyebrow { margin: 0 0 14px; color: var(--yellow); font-size: .78rem; font-weight: 900; }
+  h1 { margin: 0; max-width: 620px; font: 900 clamp(2.8rem, 7vw, 6rem)/.92 Georgia, "Times New Roman", serif; letter-spacing: 0; }
+  .welcome-copy p { max-width: 560px; color: #d6dde4; line-height: 1.8; }
+  .feature-line { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+  .feature-line span { padding: 7px 10px; border: 1px solid #53606b; color: #f4f6f8; font-size: .82rem; font-weight: 800; }
+  .entry { padding: clamp(24px, 5vw, 50px); display: grid; align-content: center; gap: 18px; }
+  .entry h2, .lobby h2, .result h2 { margin: 0; font: 900 clamp(1.8rem, 4vw, 3rem)/1 Georgia, serif; }
+  .field { display: grid; gap: 7px; }
+  label { color: var(--muted); font-size: .86rem; font-weight: 850; }
+  input, select { width: 100%; min-height: 50px; padding: 0 14px; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 0; }
+  input:focus, select:focus { outline: 3px solid rgba(34,92,145,.16); border-color: var(--blue); }
+  .join-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .btn { min-height: 48px; padding: 0 18px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-weight: 900; }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.blue { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn:disabled { cursor: not-allowed; opacity: .45; }
+  .divider { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; color: var(--muted); font-size: .8rem; }
+  .divider::before, .divider::after { content: ""; height: 1px; background: var(--line); }
+  .notice { padding: 12px 14px; border-left: 4px solid var(--yellow); background: #fff7d9; color: #6f5710; line-height: 1.6; font-size: .88rem; }
+  .error { display: none; padding: 11px 13px; border-left: 4px solid var(--red); background: #fff0ed; color: #8a3025; line-height: 1.55; }
+  .error.show { display: block; }
+
+  .lobby { padding: clamp(24px, 5vw, 50px); }
+  .room-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 28px; }
+  .room-code { padding: 10px 14px; border: 2px solid var(--ink); background: var(--yellow); font: 900 1.5rem/1 Georgia, serif; letter-spacing: .12em; }
+  .players { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .player-card { min-height: 170px; padding: 22px; border: 1px solid var(--line); background: #fff; display: flex; flex-direction: column; justify-content: space-between; }
+  .player-card.me { border-top: 6px solid var(--blue); }
+  .player-card .name { font: 900 1.45rem/1.1 Georgia, serif; }
+  .state { color: var(--muted); font-weight: 800; }
+  .state.ready { color: var(--green); }
+  .empty { color: #98a2b3; }
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; padding: 18px; border: 1px solid var(--line); background: #f7f5ed; }
+  .lobby-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .game { display: grid; gap: 12px; }
+  .scorebar { display: grid; grid-template-columns: 1fr 140px 1fr; min-height: 116px; overflow: hidden; }
+  .score-player { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .score-player:first-child { background: var(--soft-blue); }
+  .score-player:last-child { background: var(--soft-green); text-align: right; }
+  .score-name { display: block; color: var(--muted); font-size: .86rem; font-weight: 900; }
+  .score { display: block; margin-top: 4px; font: 900 2.8rem/1 Georgia, serif; }
+  .round-box { display: grid; place-items: center; align-content: center; background: var(--ink); color: #fff; text-align: center; }
+  .round-box strong { font: 900 1.5rem/1 Georgia, serif; }
+  .round-box span { margin-top: 6px; color: #cbd2d9; font-size: .78rem; }
+  .arena { min-height: 590px; padding: clamp(22px, 4vw, 44px); }
+  .game-meta { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+  .tags { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tag { padding: 6px 9px; border: 1px solid var(--line); background: #fff; color: var(--muted); font-size: .78rem; font-weight: 900; }
+  .timer { position: relative; width: 70px; aspect-ratio: 1; display: grid; place-items: center; border: 6px solid var(--yellow); background: var(--ink); color: #fff; font: 900 1.5rem/1 Georgia, serif; border-radius: 50%; }
+  .question { margin: 30px 0 24px; max-width: 900px; font-size: clamp(1.55rem, 3.6vw, 2.8rem); line-height: 1.28; font-weight: 900; }
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .option { min-height: 92px; padding: 14px 18px; border: 2px solid var(--line); background: #fff; color: var(--ink); text-align: left; font-weight: 850; line-height: 1.45; }
+  .option:hover:not(:disabled) { border-color: var(--blue); transform: translateY(-2px); }
+  .option.selected { border-color: var(--blue); background: var(--soft-blue); }
+  .option.correct { border-color: var(--green); background: var(--soft-green); }
+  .option.wrong { border-color: var(--red); background: #fff0ed; }
+  .choice-key { display: inline-grid; place-items: center; width: 28px; aspect-ratio: 1; margin-right: 8px; background: var(--ink); color: #fff; font: 900 .85rem/1 Georgia, serif; }
+  .feedback { min-height: 70px; margin-top: 18px; padding: 14px 16px; border-left: 5px solid var(--blue); background: #edf5fc; line-height: 1.7; }
+  .feedback.waiting { color: var(--muted); }
+  .feedback strong { display: block; margin-bottom: 3px; }
+  .progress { height: 8px; background: #dfe4dc; overflow: hidden; }
+  .progress span { display: block; height: 100%; background: var(--green); transition: width .3s ease; }
+
+  .result { padding: clamp(28px, 6vw, 70px); text-align: center; }
+  .winner { margin: 22px auto 8px; color: var(--green); font: 900 clamp(2.4rem, 6vw, 5rem)/1 Georgia, serif; }
+  .final-scores { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 720px; margin: 28px auto; }
+  .final-card { padding: 24px; border: 1px solid var(--line); background: #fff; }
+  .final-card strong { display: block; margin-top: 8px; font: 900 3rem/1 Georgia, serif; }
+
+  @media (max-width: 760px) {
+    .welcome { grid-template-columns: 1fr; min-height: auto; }
+    .welcome-copy { min-height: 330px; }
+    .players, .settings, .options { grid-template-columns: 1fr; }
+    .scorebar { grid-template-columns: 1fr 78px 1fr; }
+    .score-player { padding: 12px; display: block; }
+    .score { font-size: 2rem; }
+    .arena { min-height: 620px; }
+    .room-head { align-items: center; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <div class="topbar">
+    <div class="brand">PEP 5B · LIVE PK</div>
+    <div class="connection"><span class="dot" id="statusDot"></span><span id="statusText">连接中</span></div>
+  </div>
+
+  <section class="screen active" id="entryScreen">
+    <div class="welcome panel">
+      <div class="welcome-copy">
+        <div><p class="eyebrow">TWO PLAYERS · ONE LIVE ROOM</p><h1>五下英语<br>实时双人 PK</h1><p>同题、同屏、同倒计时。看懂题目再出手，系统自动判分，不需要输入英文答案。</p></div>
+        <div class="feature-line"><span>60 道提优题</span><span>实时比分</span><span>自动判分</span><span>随机 12 题</span></div>
+      </div>
+      <div class="entry">
+        <div><p class="eyebrow" style="color:var(--green)">ENTER THE MATCH</p><h2>进入比赛</h2></div>
+        <div class="field"><label for="nameInput">你的名字</label><input id="nameInput" maxlength="12" autocomplete="nickname" placeholder="例如：Leo"></div>
+        <button class="btn primary" id="createBtn" disabled>创建新房间</button>
+        <div class="divider">或者加入同学的房间</div>
+        <div class="join-row"><input id="roomInput" maxlength="4" inputmode="text" placeholder="四位房间码"><button class="btn blue" id="joinBtn" disabled>加入</button></div>
+        <div class="error" id="entryError"></div>
+        <div class="notice" id="setupNotice">正在连接服务器，请稍候...</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="lobbyScreen">
+    <div class="lobby panel">
+      <div class="room-head"><div><p class="eyebrow" style="color:var(--green)">MATCH LOBBY</p><h2>等待双方准备</h2></div><div class="room-code" id="roomCode">----</div></div>
+      <div class="players" id="lobbyPlayers"></div>
+      <div class="settings" id="settingsBox">
+        <div class="field"><label for="unitSelect">本局范围</label><select id="unitSelect"><option value="0">Unit 1-6 综合</option><option value="1">Unit 1</option><option value="2">Unit 2</option><option value="3">Unit 3</option><option value="4">Unit 4</option><option value="5">Unit 5</option><option value="6">Unit 6</option></select></div>
+        <div class="field"><label for="countSelect">题目数量</label><select id="countSelect"><option value="12">12 题</option><option value="10">10 题</option><option value="6">6 题</option></select></div>
+      </div>
+      <div class="lobby-actions"><button class="btn primary" id="readyBtn">我准备好了</button><button class="btn blue" id="startBtn" disabled>双方准备后开始</button><button class="btn" id="copyBtn">复制房间码</button></div>
+      <div class="error" id="lobbyError" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <section class="screen" id="gameScreen">
+    <div class="game">
+      <div class="scorebar panel"><div class="score-player" id="scoreP0"></div><div class="round-box"><strong id="roundText">1 / 12</strong><span>ROUND</span></div><div class="score-player" id="scoreP1"></div></div>
+      <div class="progress"><span id="progressBar"></span></div>
+      <div class="arena panel">
+        <div class="game-meta"><div class="tags"><span class="tag" id="unitTag">Unit 1</span><span class="tag" id="typeTag">逻辑推断</span><span class="tag" id="levelTag">挑战</span></div><div class="timer" id="timer">20</div></div>
+        <div class="question" id="question"></div>
+        <div class="options" id="options"></div>
+        <div class="feedback waiting" id="feedback">选择答案后不可修改。先读懂，再出手。</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="resultScreen">
+    <div class="result panel"><p class="eyebrow" style="color:var(--green)">FINAL RESULT</p><h2>本局结束</h2><div class="winner" id="winner"></div><div class="final-scores" id="finalScores"></div><button class="btn primary" id="againBtn">返回大厅，再来一局</button></div>
+  </section>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ===== 题目数据 =====
+const Q = [
+  {id:'u1q1',u:1,type:'句型陷阱',level:'挑战',q:'I usually ___ at 7:00, but my brother ___ at 7:30.',o:['get up; get up','get up; gets up','gets up; get up','getting up; gets up'],a:1,e:'I 后用动词原形；my brother 是第三人称单数，用 gets。'},
+  {id:'u1q2',u:1,type:'反向提问',level:'挑战',q:'Answer: "I often clean my room on Saturdays." Which question is the best?',o:['When are you cleaning your room?','What do you often do on Saturdays?','Why do you clean your room?','What does he do on Saturdays?'],a:1,e:'答案说的是自己的周六习惯，应用 What do you often do...? 提问。'},
+  {id:'u1q3',u:1,type:'语序判断',level:'挑战',q:'Which sentence has the correct word order?',o:['I clean usually my room on Sundays.','Usually I am clean my room on Sundays.','I usually clean my room on Sundays.','I clean my room usually on Sundays often.'],a:2,e:'频率副词 usually 通常放在实义动词 clean 前。'},
+  {id:'u1q4',u:1,type:'信息推断',level:'王牌',q:'Tom gets up at 6:40. He eats breakfast 20 minutes later. When does he eat breakfast?',o:['At 6:20.','At 6:40.','At 7:00.','At 7:20.'],a:2,e:'6:40 之后 20 分钟是 7:00。'},
+  {id:'u1q5',u:1,type:'找错',level:'王牌',q:'Which sentence is NOT correct?',o:['I sometimes go shopping with my mum.','She often plays sports after school.','We usually eats dinner at 6:30.','He always goes for a walk on Sundays.'],a:2,e:'主语 We 后用 eat，不能用 eats。'},
+  {id:'u1q6',u:1,type:'语境选择',level:'挑战',q:'You want to know your friend\'s weekend activities, not the time. What should you ask?',o:['When do you get up?','What do you do on the weekend?','Where is your school?','Why are you busy?'],a:1,e:'问周末做什么，用 What do you do on the weekend?'},
+  {id:'u1q7',u:1,type:'介词混合',level:'挑战',q:'I get up ___ 6:30 ___ school days, but later ___ the weekend.',o:['at; on; on','on; at; in','at; in; at','in; on; at'],a:0,e:'点钟前用 at；具体的日子和 on the weekend 都用 on。'},
+  {id:'u1q8',u:1,type:'频率推断',level:'王牌',q:'Lucy plays sports on Monday, Wednesday, Friday and Sunday. Which word describes this habit best?',o:['never','sometimes','often','always'],a:2,e:'一周多次但不是每天，often 最合适。'},
+  {id:'u1q9',u:1,type:'语篇衔接',level:'王牌',q:'Choose the best sentence: "My weekend is busy. I clean my room on Saturday morning. ___ I play basketball with my friends."',o:['Then,','Because,','Whose,','At 7:00?'],a:0,e:'Then 表示活动顺序，使周末小短文衔接自然。'},
+  {id:'u1q10',u:1,type:'多线索推断',level:'王牌',q:'Mia goes to bed at 9:00. Jack goes to bed 30 minutes later. Which sentence is correct?',o:['Jack goes to bed at 8:30.','Jack go to bed at 9:30.','Jack goes to bed at 9:30.','Jack is go to bed at 9:30.'],a:2,e:'9:00 后 30 分钟是 9:30；Jack 是第三人称单数，用 goes。'},
+  {id:'u2q1',u:2,type:'逻辑推断',level:'挑战',q:'I wear a coat, and I can play in the snow. Which season is it?',o:['Spring.','Summer.','Autumn.','Winter.'],a:3,e:'coat 和 snow 都指向 winter。'},
+  {id:'u2q2',u:2,type:'句型陷阱',level:'挑战',q:'I like summer best because I can ___.',o:['swimming','go swimming','to swim','go to swimming'],a:1,e:'can 后接动词原形；固定搭配是 go swimming。'},
+  {id:'u2q3',u:2,type:'问答匹配',level:'挑战',q:'Which answer best matches "Why do you like autumn?"',o:['It is in September.','Because I can pick apples.','I like autumn best.','It is cool?'],a:1,e:'Why 问原因，应用 Because 回答。'},
+  {id:'u2q4',u:2,type:'表达升级',level:'王牌',q:'Which is the strongest answer to "Which season do you like best?"',o:['Summer.','I like summer.','I like summer best because I can go swimming.','Because summer.'],a:2,e:'完整回答包含观点和原因，信息最充分。'},
+  {id:'u2q5',u:2,type:'找错',level:'王牌',q:'Which sentence needs correction?',o:['Spring is warm and windy.','I can make a snowman in winter.','Because the weather is hot, so I like summer.','We often pick apples in autumn.'],a:2,e:'在本阶段英语表达中，because 和 so 不同时连用。'},
+  {id:'u2q6',u:2,type:'搭配判断',level:'挑战',q:'Which activity-season pair is least reasonable?',o:['spring — go on a picnic','summer — go swimming','autumn — pick apples','winter — plant rice in the hot sun'],a:3,e:'hot sun 下种水稻不是教材中的冬季活动。'},
+  {id:'u2q7',u:2,type:'疑问词辨析',level:'挑战',q:'___ season do you like best, and ___ do you like it?',o:['When; what','Which; why','Why; which','Whose; when'],a:1,e:'Which 询问哪一个季节，Why 继续追问原因。'},
+  {id:'u2q8',u:2,type:'结构判断',level:'王牌',q:'Which sentence follows "can + 动词原形" correctly?',o:['We can picking apples.','We can to pick apples.','We can pick apples.','We can picks apples.'],a:2,e:'情态动词 can 后必须接动词原形 pick。'},
+  {id:'u2q9',u:2,type:'比较推断',level:'王牌',q:'Ben likes hot weather and water sports. Sue likes cool weather and fruit-picking. Which pair is most likely?',o:['Ben—winter; Sue—spring','Ben—summer; Sue—autumn','Ben—autumn; Sue—summer','Ben—spring; Sue—winter'],a:1,e:'hot weather 和 water sports 指向 summer；pick fruit 指向 autumn。'},
+  {id:'u2q10',u:2,type:'高分表达',level:'王牌',q:'Which sentence best completes a paragraph about spring?',o:['Spring because warm.','I spring best.','I like spring best because it is warm and I can see beautiful flowers.','Which spring do you like?'],a:2,e:'完整句同时包含季节、天气和原因，信息层次最丰富。'},
+  {id:'u3q1',u:3,type:'介词陷阱',level:'挑战',q:'The sports meet is ___ April, and the English party is ___ April 18th.',o:['on; in','in; on','at; on','in; at'],a:1,e:'月份前用 in，具体日期前用 on。'},
+  {id:'u3q2',u:3,type:'日历推断',level:'王牌',q:'April: sports meet; May: school trip; June: singing contest. What do we have in May?',o:['A sports meet.','A school trip.','A singing contest.','An art show.'],a:1,e:'先定位 May，再读取对应活动 school trip。'},
+  {id:'u3q3',u:3,type:'问答匹配',level:'挑战',q:'Answer: "It\'s in October." Which question fits best?',o:['What is the school trip?','When is the school trip?','Where is October?','Why is the trip?'],a:1,e:'in October 是时间信息，问题用 When。'},
+  {id:'u3q4',u:3,type:'语法判断',level:'王牌',q:'Which school notice is completely correct?',o:['We has an English party on March.','We have a English party in March.','We have an English party in March.','We have an English party at March.'],a:2,e:'We have；English 前用 an；月份 March 前用 in。'},
+  {id:'u3q5',u:3,type:'月份排序',level:'挑战',q:'Which group is in the correct calendar order?',o:['March, January, February','September, October, November','June, May, July','December, October, November'],a:1,e:'September → October → November 顺序正确。'},
+  {id:'u3q6',u:3,type:'审题陷阱',level:'王牌',q:'"When is the trip?" and "What is the trip?" ask about ___ and ___ respectively.',o:['place; time','time; content','reason; owner','season; date'],a:1,e:'When 问时间，What 问内容或是什么。'},
+  {id:'u3q7',u:3,type:'书写规范',level:'挑战',q:'Which sentence uses month names correctly?',o:['The trip is in october.','The trip is in October.','The trip is In october.','The trip is at October.'],a:1,e:'月份首字母要大写，月份前用 in。'},
+  {id:'u3q8',u:3,type:'日历计算',level:'王牌',q:'The sports meet is in March. The school trip is two months later. In which month is the trip?',o:['January','April','May','June'],a:2,e:'March 后两个月是 May。'},
+  {id:'u3q9',u:3,type:'信息整合',level:'王牌',q:'Calendar: April—English party; May—school trip. Which report is accurate?',o:['We have both events in April.','We have a trip in April and a party in May.','We have an English party in April and a school trip in May.','We have no events in May.'],a:2,e:'按表格逐项对应月份和活动，C 完全准确。'},
+  {id:'u3q10',u:3,type:'跨单元辨析',level:'王牌',q:'Which expression tells only the month, not the exact date?',o:['on May 1st','in May','at 7:00','on Monday'],a:1,e:'in May 只给出月份；on May 1st 才是具体日期。'},
+  {id:'u4q1',u:4,type:'日期陷阱',level:'挑战',q:'My birthday is ___ June 3rd.',o:['at','in','on','from'],a:2,e:'具体日期前用 on。'},
+  {id:'u4q2',u:4,type:'序数词',level:'挑战',q:'Which spelling is correct?',o:['5th — fiveth','12th — twelveth','20th — twentieth','21st — twenty-oneth'],a:2,e:'20th 拼作 twentieth；其他三个选项拼写错误。'},
+  {id:'u4q3',u:4,type:'日期推理',level:'王牌',q:'The reading festival is on April 23rd. The art show is five days later. When is it?',o:['On April 18th.','On April 25th.','On April 28th.','In April 28th.'],a:2,e:'23rd 后 5 天是 28th，具体日期前用 on。'},
+  {id:'u4q4',u:4,type:'读法判断',level:'挑战',q:'How do we read "June 22nd"?',o:['June twenty-two','June twenty-second','The twenty-two June','June two-second'],a:1,e:'日期中的 22nd 读作 twenty-second。'},
+  {id:'u4q5',u:4,type:'找错',level:'王牌',q:'Which sentence has TWO mistakes?',o:['The art show is on May 1st.','My birthday is in July.','The English test is on November twenty and we has a party.','The school trip is on October 12th.'],a:2,e:'日期应为 November 20th；we 后应为 have。'},
+  {id:'u4q6',u:4,type:'信息判断',level:'王牌',q:'A complete event notice should include the event, the date and ___.',o:['a random season','what to prepare','the owner of a dog','a daily routine'],a:1,e:'活动提醒还应说明准备事项，信息才完整。'},
+  {id:'u4q7',u:4,type:'跨月推理',level:'王牌',q:'The art show is on April 30th. The music show is two days later. When is the music show?',o:['On April 32nd.','On May 1st.','On May 2nd.','In May 2nd.'],a:2,e:'April 只有 30 天，两天后是 May 2nd，具体日期前用 on。'},
+  {id:'u4q8',u:4,type:'序数词配对',level:'挑战',q:'Which number-word pair is NOT correct?',o:['3rd—third','5th—fifth','12th—twelfth','30th—threetieth'],a:3,e:'30th 正确拼写是 thirtieth。'},
+  {id:'u4q9',u:4,type:'反向提问',level:'王牌',q:'Answer: "The art show is on October 12th." Which question is most exact?',o:['What is the art show?','Where is the art show?','When is the art show?','Whose art show is it?'],a:2,e:'答案给出具体日期，因此用 When 询问时间。'},
+  {id:'u4q10',u:4,type:'日期排序',level:'王牌',q:'Which event happens first?',o:['The test is on June 21st.','The trip is on June 12th.','The show is on June 2nd.','The party is on June 20th.'],a:2,e:'同一个月中比较日期数字，June 2nd 最早。'},
+  {id:'u5q1',u:5,type:'代词陷阱',level:'挑战',q:"This is ___ storybook. The storybook is ___.",o:['my; my','mine; my','my; mine','me; mine'],a:2,e:'名词前用 my；单独表示"我的"用 mine。'},
+  {id:'u5q2',u:5,type:'代词转换',level:'挑战',q:'This is their classroom. Which rewrite is correct?',o:["The classroom is their.","The classroom is theirs.","The classroom is them.","Theirs is classroom."],a:1,e:'their 后接名词，theirs 可以单独使用。'},
+  {id:'u5q3',u:5,type:'线索推断',level:'王牌',q:'Amy has a red pen. Sarah has a blue pen. The red pen is on the desk. Whose pen is on the desk?',o:["It's Sarah's.","It's Amy's.","It's theirs.","It's yours."],a:1,e:'红笔属于 Amy，所以可回答 It\'s Amy\'s。'},
+  {id:'u5q4',u:5,type:'时态辨析',level:'王牌',q:'Which sentence describes an action happening right now?',o:['The dog drinks water every day.','The dog is drinking water.','The dog can drink water.','The dog likes water.'],a:1,e:'is drinking 表示正在发生。'},
+  {id:'u5q5',u:5,type:'找错',level:'王牌',q:'Which correction is best for "This is hers dog. The dog sleeping."?',o:["This is her dog. The dog is sleeping.","This is hers dog. The dog is sleep.","This is she dog. The dog sleeping.","This is her dog. The dog sleeps now."],a:0,e:'名词 dog 前用 her；正在睡用 is sleeping。'},
+  {id:'u5q6',u:5,type:'问句选择',level:'挑战',q:'You see a book but do not know its owner. What should you ask first?',o:['Who book is this?','Whose book is this?','Who is book this?','Which book owner?'],a:1,e:'询问"谁的"用 Whose + 名词。'},
+  {id:'u5q7',u:5,type:'代词整组',level:'挑战',q:'Which change is correct?',o:['my → me','your → yous','her → hers','their → thems'],a:2,e:'her 后接名词；hers 可以单独表示"她的"。'},
+  {id:'u5q8',u:5,type:'归属辨析',level:'王牌',q:'We made this poster together. It belongs to us. The poster is ___.',o:['our','ours','their','theirs'],a:1,e:'空格后没有名词，表示"我们的"用 ours。'},
+  {id:'u5q9',u:5,type:'动作形式',level:'王牌',q:'Look! The rabbits ___ and the dog ___.',o:['is jumping; are sleeping','are jumping; is sleeping','jump; sleeping','are jump; sleeps'],a:1,e:'rabbits 是复数用 are jumping；dog 是单数用 is sleeping。'},
+  {id:'u5q10',u:5,type:'双重推断',level:'王牌',q:'The white cat belongs to Lily. It is climbing the tree now. Which report is correct?',o:["The cat is her and it climbs now.","The cat is hers and it is climbing now.","The cat is hers and they are climbing.","The cat is she and it climbing."],a:1,e:'表示归属用 hers；描述正在发生的动作，用 is climbing。'},
+  {id:'u6q1',u:6,type:'规则陷阱',level:'挑战',q:'The baby is sleeping. Please ___.',o:['talks quietly','talk quietly','talking quietly','to talk quietly'],a:1,e:'祈使句用动词原形 talk。'},
+  {id:'u6q2',u:6,type:'时态转换',level:'挑战',q:'"他们正在读书。" Which sentence is correct?',o:['They reading books.','They are read books.','They are reading books.','They reads books now.'],a:2,e:'现在进行时是 are + reading。'},
+  {id:'u6q3',u:6,type:'规则分类',level:'王牌',q:'Which rule expresses a prohibition?',o:['Keep to the right.','Take turns.','Work quietly.','No eating.'],a:3,e:'No + V-ing 表示禁止做某事。'},
+  {id:'u6q4',u:6,type:'场景迁移',level:'王牌',q:'A boy is jumping in the library. What is the best reminder?',o:['Jump higher, please.','No jumping, please.','Eat quietly, please.','Keep your desk clean.'],a:1,e:'图书馆不能跳，No jumping 最符合场景。'},
+  {id:'u6q5',u:6,type:'时态辨析',level:'王牌',q:'Which pair is correct?',o:['right now — general present; every day — present continuous','right now — present continuous; every day — general present','both — general present','both — present continuous'],a:1,e:'right now 指正在发生；every day 指日常习惯。'},
+  {id:'u6q6',u:6,type:'找错',level:'王牌',q:'They are eating lunch now, but they ___.',o:['talks loudly','are talking loudly','is talking loudly','talking loudly'],a:1,e:'主语 they，且描述 now 的画面，用 are talking。'},
+  {id:'u6q7',u:6,type:'场景规则',level:'挑战',q:'Students are walking up the stairs. Which rule is the most useful?',o:['Keep to the right.','No reading.','Eat your lunch.','Make a snowman.'],a:0,e:'上下楼梯时 Keep to the right 最符合安全场景。'},
+  {id:'u6q8',u:6,type:'规则理解',level:'王牌',q:'Two students both want the same book. What should the teacher say?',o:['Take turns, please.','Talk loudly, please.','No cleaning.','Keep eating.'],a:0,e:'共同使用同一物品时应轮流，使用 Take turns。'},
+  {id:'u6q9',u:6,type:'主谓判断',level:'王牌',q:"What ___ the children doing? They ___ playing a word game.",o:['is; is','are; are','are; is','do; are'],a:1,e:'children 是复数，问句和答句都用 are。'},
+  {id:'u6q10',u:6,type:'同义表达',level:'王牌',q:'Which sentence is closest in meaning to "No eating here"?',o:["You don't eat every day.","Please don't eat here.",'You are eating here.','Take turns to eat here.'],a:1,e:'No eating here 和 Please don\'t eat here 都是在提醒此处禁止吃东西。'}
+];
+
+// ===== 全局状态 =====
+const $ = id => document.getElementById(id);
+let socket = null;
+let uid = '';
+let room = null;
+let roomCode = '';
+let timerHandle = null;
+let submitting = false;
+let nextScheduled = false;
+
+// ===== 工具函数 =====
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(el => el.classList.toggle('active', el.id === id));
+}
+function fail(id, message) { const el = $(id); el.textContent = message; el.classList.add('show'); }
+function clearFail(id) { $(id).classList.remove('show'); }
+function cleanName() { return $('nameInput').value.trim().replace(/[<>]/g, '').slice(0, 12); }
+function shuffled(items) {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function playersOf(data = room) {
+  return Object.entries(data?.players || {}).sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+}
+function me() { return room?.players?.[uid]; }
+function questionNow() { return Q.find(x => x.id === room?.current?.questionId); }
+
+// ===== 连接服务器 =====
+function connect() {
+  $('createBtn').disabled = true;
+  $('joinBtn').disabled = true;
+  $('setupNotice').textContent = '正在连接服务器，请稍候...';
+
+  // 自动检测服务器地址（同域名）
+  const url = location.origin;
+  socket = io(url, { transports: ['websocket', 'polling'] });
+
+  socket.on('connect', () => {
+    uid = sessionStorage.getItem('pep5-uid') || '';
+    $('statusDot').classList.add('online');
+    $('statusText').textContent = '服务器已连接';
+    $('setupNotice').style.display = 'none';
+    clearFail('entryError');
+    $('createBtn').disabled = false;
+    $('joinBtn').disabled = false;
+    // 尝试重新加入之前的房间
+    const savedRoom = sessionStorage.getItem('pep5-room');
+    const savedName = sessionStorage.getItem('pep5-name');
+    if (savedRoom && savedName) {
+      socket.emit('join-room', { name: savedName, roomCode: savedRoom }, (res) => {
+        if (res.ok) {
+          uid = res.uid;
+          roomCode = res.roomCode;
+          sessionStorage.setItem('pep5-uid', uid);
+        }
+      });
+    }
+  });
+
+  socket.on('connect_error', () => {
+    $('statusText').textContent = '连接失败';
+    $('setupNotice').textContent = '无法连接服务器，请刷新重试。';
+  });
+
+  socket.on('room-update', (data) => {
+    room = data;
+    // 新轮次开始时重置 nextScheduled
+    if (data.current && !data.current.resolved) nextScheduled = false;
+    renderRoom();
+  });
+
+  socket.on('all-answered', () => {
+    if (room.hostUid === uid && !room.current?.resolved) {
+      socket.emit('resolve-round');
+    }
+  });
+
+  socket.on('all-answered', ({ round }) => {
+    if (room.hostUid === uid) {
+      socket.emit('resolve-round');
+    }
+  });
+}
+
+// ===== 房间操作 =====
+function createRoom() {
+  clearFail('entryError');
+  const name = cleanName();
+  if (!name) return fail('entryError', '请先输入名字。');
+  socket.emit('create-room', { name }, (res) => {
+    if (!res.ok) return fail('entryError', res.error);
+    uid = res.uid;
+    roomCode = res.roomCode;
+    sessionStorage.setItem('pep5-uid', uid);
+    sessionStorage.setItem('pep5-room', roomCode);
+    sessionStorage.setItem('pep5-name', name);
+    $('roomCode').textContent = roomCode;
+    showScreen('lobbyScreen');
+  });
+}
+
+function joinRoom() {
+  clearFail('entryError');
+  const name = cleanName();
+  roomCode = $('roomInput').value.trim().toUpperCase();
+  if (!name) return fail('entryError', '请先输入名字。');
+  if (!/^[A-Z0-9]{4}$/.test(roomCode)) return fail('entryError', '请输入正确的四位房间码。');
+  socket.emit('join-room', { name, roomCode }, (res) => {
+    if (!res.ok) return fail('entryError', res.error);
+    uid = res.uid;
+    roomCode = res.roomCode;
+    sessionStorage.setItem('pep5-uid', uid);
+    sessionStorage.setItem('pep5-room', roomCode);
+    sessionStorage.setItem('pep5-name', name);
+    $('roomCode').textContent = roomCode;
+    showScreen('lobbyScreen');
+  });
+}
+
+// ===== 渲染 =====
+function renderRoom() {
+  if (!room) return;
+  if (room.status === 'lobby') { showScreen('lobbyScreen'); renderLobby(); }
+  if (room.status === 'playing') { showScreen('gameScreen'); renderGame(); startTimer(); }
+  if (room.status === 'finished') { stopTimer(); showScreen('resultScreen'); renderResult(); }
+}
+
+function renderLobby() {
+  const ps = playersOf();
+  $('lobbyPlayers').innerHTML = [0, 1].map(i => {
+    const p = ps[i];
+    if (!p) return '<div class="player-card empty"><span>等待另一位同学加入...</span></div>';
+    return `<div class="player-card ${ps[i][0] === uid ? 'me' : ''}"><span class="name">${p[1].name}</span><span class="state ${p[1].ready ? 'ready' : ''}">${p[1].ready ? '已准备' : '还未准备'}${ps[i][0] === uid ? ' · 我' : ''}</span></div>`;
+  }).join('');
+  $('readyBtn').textContent = me()?.ready ? '取消准备' : '我准备好了';
+  const host = room.hostUid === uid;
+  $('settingsBox').style.opacity = host ? '1' : '.62';
+  $('unitSelect').disabled = !host;
+  $('countSelect').disabled = !host;
+  $('unitSelect').value = String(room.settings?.unit || 0);
+  $('countSelect').value = String(room.settings?.count || 12);
+  const canStart = host && ps.length === 2 && ps.every(([, p]) => p.ready);
+  $('startBtn').disabled = !canStart;
+  $('startBtn').textContent = host ? (canStart ? '开始比赛！' : '等待双方准备') : '等待房主开始';
+}
+
+function toggleReady() {
+  socket.emit('toggle-ready');
+}
+
+function saveSettings() {
+  if (room.hostUid !== uid) return;
+  socket.emit('update-settings', { unit: $('unitSelect').value, count: $('countSelect').value });
+}
+
+function startGame() {
+  if (room.hostUid !== uid) return;
+  const unit = room.settings.unit || 0;
+  const pool = unit === 0 ? Q : Q.filter(q => q.u === unit);
+  const ids = shuffled(pool).slice(0, Math.min(room.settings.count || 12, pool.length)).map(q => q.id);
+  socket.emit('game-start', { questionIds: ids });
+}
+
+// ===== 游戏界面 =====
+function renderScores() {
+  const ps = playersOf();
+  [0, 1].forEach(i => {
+    const p = ps[i]?.[1] || { name: '等待', score: 0 };
+    $(`scoreP${i}`).innerHTML = `<div><span class="score-name">${p.name}</span><span class="score">${p.score || 0}</span></div><span class="state">${p.streak || 0} 连胜</span>`;
+  });
+}
+
+function renderGame() {
+  const q = questionNow();
+  if (!q) return;
+  renderScores();
+  const total = room.questionIds.length;
+  $('roundText').textContent = `${room.round + 1} / ${total}`;
+  $('progressBar').style.width = `${((room.round + 1) / total) * 100}%`;
+  $('unitTag').textContent = `Unit ${q.u}`;
+  $('typeTag').textContent = q.type;
+  $('levelTag').textContent = q.level;
+  $('question').textContent = q.q;
+  const answer = room.answers?.[room.round]?.[uid];
+  const resolved = room.current?.resolved;
+  const letters = ['A', 'B', 'C', 'D'];
+  $('options').innerHTML = q.o.map((opt, i) => {
+    let cls = '';
+    if (answer?.choice === i) cls += ' selected';
+    if (resolved && i === q.a) cls += ' correct';
+    if (resolved && answer?.choice === i && i !== q.a) cls += ' wrong';
+    return `<button class="option${cls}" data-choice="${i}" ${answer || resolved ? 'disabled' : ''}><span class="choice-key">${letters[i]}</span>${opt}</button>`;
+  }).join('');
+  document.querySelectorAll('.option').forEach(btn => {
+    btn.addEventListener('click', () => submitAnswer(Number(btn.dataset.choice)));
+  });
+  const allAnswers = room.answers?.[room.round] || {};
+  if (resolved) {
+    const mineAnswer = allAnswers[uid];
+    const pts = mineAnswer?.points || 0;
+    $('feedback').className = 'feedback';
+    $('feedback').innerHTML = `<strong>${mineAnswer?.choice === q.a ? '回答正确' : '这题需要再想一步'} · +${pts} 分</strong>${q.e}`;
+  } else if (answer) {
+    $('feedback').className = 'feedback waiting';
+    $('feedback').textContent = '答案已锁定，等待对方作答或倒计时结束。';
+  } else {
+    $('feedback').className = 'feedback waiting';
+    $('feedback').textContent = '选择答案后不可修改。先读懂，再出手。';
+  }
+  if (room.hostUid === uid) hostCheck();
+  // 房主在显示答案后自动进入下一题
+  if (room.current?.resolved && room.hostUid === uid) {
+    scheduleNext();
+  }
+}
+
+async function submitAnswer(choice) {
+  if (submitting || room.current?.resolved || room.answers?.[room.round]?.[uid]) return;
+  submitting = true;
+  socket.emit('submit-answer', { choice, round: room.round });
+  setTimeout(() => { submitting = false; }, 500);
+}
+
+function secondsLeft() {
+  const started = room?.current?.startedAt || Date.now();
+  return Math.max(0, (room?.settings?.seconds || 20) - Math.floor((Date.now() - started) / 1000));
+}
+
+function startTimer() {
+  if (timerHandle) return;
+  timerHandle = setInterval(() => {
+    if (room?.status !== 'playing') return;
+    $('timer').textContent = secondsLeft();
+    if (room.hostUid === uid) hostCheck();
+  }, 250);
+}
+
+function stopTimer() {
+  clearInterval(timerHandle);
+  timerHandle = null;
+}
+
+function hostCheck() {
+  if (room.hostUid !== uid || room.current?.resolved) return;
+  const answers = room.answers?.[room.round] || {};
+  if (Object.keys(answers).length >= playersOf().length || secondsLeft() <= 0) {
+    socket.emit('resolve-round');
+  }
+}
+
+function scheduleNext() {
+  if (nextScheduled || room.hostUid !== uid || !room.current?.resolved) return;
+  nextScheduled = true;
+  setTimeout(() => {
+    nextScheduled = false;
+    if (room?.current?.resolved) {
+      socket.emit('next-round');
+    }
+  }, 3200);
+}
+
+function renderResult() {
+  const ps = playersOf().sort((a, b) => (b[1].score || 0) - (a[1].score || 0));
+  const tie = (ps[0]?.[1].score || 0) === (ps[1]?.[1].score || 0);
+  $('winner').textContent = tie ? '平局！' : `${ps[0][1].name} 获胜`;
+  $('finalScores').innerHTML = ps.map(([, p]) =>
+    `<div class="final-card"><span>${p.name}</span><strong>${p.score || 0}</strong></div>`
+  ).join('');
+  const host = room.hostUid === uid;
+  $('againBtn').disabled = !host;
+  $('againBtn').textContent = host ? '返回大厅，再来一局' : '等待房主开启下一局';
+}
+
+function backToLobby() {
+  if (room.hostUid === uid) {
+    socket.emit('back-to-lobby');
+  }
+}
+
+// scheduleNext 在 renderGame 末尾调用，不需要额外监听
+
+// ===== 绑定事件 =====
+$('createBtn').addEventListener('click', createRoom);
+$('joinBtn').addEventListener('click', joinRoom);
+$('roomInput').addEventListener('input', e => e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+$('readyBtn').addEventListener('click', toggleReady);
+$('startBtn').addEventListener('click', startGame);
+$('unitSelect').addEventListener('change', saveSettings);
+$('countSelect').addEventListener('change', saveSettings);
+$('copyBtn').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(roomCode);
+  $('copyBtn').textContent = '已复制';
+  setTimeout(() => $('copyBtn').textContent = '复制房间码', 1200);
+});
+$('againBtn').addEventListener('click', backToLobby);
+
+// 启动连接
+connect();
+</script>
+</body>
+</html>

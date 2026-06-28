@@ -1,0 +1,16 @@
+{
+  "name": "pep5pk",
+  "version": "1.0.0",
+  "description": "PEP五下实时双人PK - 英语答题对战",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "socket.io": "^4.8.3"
+  }
+}
