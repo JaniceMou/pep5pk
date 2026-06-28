@@ -137,6 +137,7 @@
         <div class="join-row"><input id="roomInput" maxlength="4" inputmode="text" placeholder="四位房间码"><button class="btn blue" id="joinBtn" disabled>加入</button></div>
         <div class="error" id="entryError"></div>
         <div class="notice" id="setupNotice">正在连接服务器，请稍候...</div>
+        <div class="error" id="wakeupError"></div>
       </div>
     </div>
   </section>
@@ -270,16 +271,51 @@ function me() { return room?.players?.[uid]; }
 function questionNow() { return Q.find(x => x.id === room?.current?.questionId); }
 
 // ===== 连接服务器 =====
+let connectTimeout = null;
+let wakeNotice = null;
+
+function showWakeNotice() {
+  if (wakeNotice) return;
+  wakeNotice = document.createElement('div');
+  wakeNotice.className = 'notice';
+  wakeNotice.style.cssText = 'border-left-color:#225c91;background:#eaf4ff;color:#1a4a7a;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;padding:16px 24px;box-shadow:0 8px 30px rgba(0,0,0,.15);max-width:90vw;text-align:center;line-height:1.6;';
+  wakeNotice.innerHTML = '<div style="font-weight:900;font-size:1rem;margin-bottom:6px">⚡ 正在唤醒服务器...</div><div style="font-size:.85rem;opacity:.85">服务器空闲后会自动休眠，首次打开需要约 30-60 秒唤醒，请稍候。</div>';
+  document.body.appendChild(wakeNotice);
+}
+
+function hideWakeNotice() {
+  if (wakeNotice) {
+    wakeNotice.remove();
+    wakeNotice = null;
+  }
+}
+
 function connect() {
   $('createBtn').disabled = true;
   $('joinBtn').disabled = true;
   $('setupNotice').textContent = '正在连接服务器，请稍候...';
+  $('setupNotice').style.display = 'block';
+
+  // 5秒后还没连上，显示"正在唤醒"提示
+  connectTimeout = setTimeout(() => {
+    showWakeNotice();
+    $('setupNotice').textContent = '服务器正在唤醒中，预计 30-60 秒...';
+  }, 5000);
 
   // 自动检测服务器地址（同域名）
   const url = location.origin;
-  socket = io(url, { transports: ['websocket', 'polling'] });
+  socket = io(url, {
+    transports: ['websocket', 'polling'],
+    timeout: 60000,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 5000
+  });
 
   socket.on('connect', () => {
+    clearTimeout(connectTimeout);
+    hideWakeNotice();
     uid = sessionStorage.getItem('pep5-uid') || '';
     $('statusDot').classList.add('online');
     $('statusText').textContent = '服务器已连接';
@@ -302,8 +338,18 @@ function connect() {
   });
 
   socket.on('connect_error', () => {
-    $('statusText').textContent = '连接失败';
-    $('setupNotice').textContent = '无法连接服务器，请刷新重试。';
+    $('statusText').textContent = '连接中...';
+    $('setupNotice').textContent = '服务器正在唤醒中，请耐心等待...';
+    showWakeNotice();
+  });
+
+  socket.io.on('reconnect_attempt', (attempt) => {
+    $('setupNotice').textContent = `正在唤醒服务器...（第 ${attempt} 次尝试）`;
+  });
+
+  socket.io.on('reconnect', () => {
+    clearTimeout(connectTimeout);
+    hideWakeNotice();
   });
 
   socket.on('room-update', (data) => {
