@@ -2,6 +2,31 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
+
+// 历史记录文件路径
+const HISTORY_FILE = path.join(__dirname, 'game-history.json');
+
+// 从文件加载历史记录
+function loadHistory() {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.error('加载历史记录失败:', e.message);
+  }
+  return [];
+}
+
+// 保存历史记录到文件
+function saveHistory(history) {
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
+  } catch (e) {
+    console.error('保存历史记录失败:', e.message);
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -112,7 +137,7 @@ const ANSWERS = {
 
 // ===== 内存存储 =====
 const rooms = {};
-const gameHistory = []; // 存储历史 PK 记录
+const gameHistory = loadHistory(); // 从文件加载历史记录
 
 // 清理超过3小时的空房间
 setInterval(() => {
@@ -162,6 +187,8 @@ function recordGameHistory(room, roomCode) {
     });
     // 只保留最近 100 条记录
     if (gameHistory.length > 100) gameHistory.pop();
+    // 写入文件持久化
+    saveHistory(gameHistory);
   }
 }
 
